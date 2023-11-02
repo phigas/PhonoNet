@@ -8,6 +8,7 @@ DIMENSION       = 3
 
 # matrix shouls have three times as many columns as photons (x,y,z), number of lines depends on the longest phonon travel or the time limit
 phonon_paths = np.loadtxt(os.path.join('Results', GEOMETRY_NAME, 'Data/Phonon paths.csv'), delimiter=',')
+print('Data loaded succesfully')
 
 # initialize list to store samples
 samples = []
@@ -25,4 +26,8 @@ for phonon_nr in range(round(phonon_paths.shape[1]/DIMENSION)):
      
 # Build dataset matrix (threedimensional matrix with dimensions: sample, coordinate number, coordinate direction)
 samples = np.concatenate(samples)
+print('Data reshaped')
 
+# save the data
+np.save(os.path.join('Datasets', f'{GEOMETRY_NAME}.npy'), samples, allow_pickle=False)
+print('Data saved')

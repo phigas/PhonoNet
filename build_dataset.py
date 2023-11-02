@@ -10,8 +10,8 @@ def build_dataset(geometry_name, train_split, batch_size, num_workers):
     data = np.load(os.path.join('Datasets', f'{geometry_name}.npy'))
 
     # split the data into input and output
-    input_data = data[:,:-1,:]
-    output_data = data[:,-1:,:]
+    input_data = data[:,:-3]
+    output_data = data[:,-3:]
 
     # convert to tensor
     input_data = torch.from_numpy(input_data)

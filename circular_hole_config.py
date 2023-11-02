@@ -1,7 +1,7 @@
 import os
 
 
-OUTPUT_FOLDER_NAME             = 'circular hole'
+OUTPUT_FOLDER_NAME             = 'circular_hole'
 
 # Simulation parameters 
 NUMBER_OF_PHONONS              = 500

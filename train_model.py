@@ -1,30 +1,48 @@
 import os
-from build_dataset import build_dataset
+from preprocess import load_datasets
 import torch
 from torch import nn
 from torch.optim import Adam
 from torch.utils.tensorboard import SummaryWriter
 
 
+def save_model(model, epoch, optimizer, criterion, checkpoint_folder):
+    torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'loss': criterion}, os.path.join(checkpoint_folder, f'checkpoint_epoch_{epoch}.pt'))
+    
+def load_model(checkpoint_folder):
+    # find the latest checkpoint
+    files = os.listdir(checkpoint_folder)
+    checkpoint_files = [file for file in files if file.startswith('checkpoint_epoch_') and file.endswith('.pt')]
+    assert checkpoint_files, 'No checkpoints found'
+    epoch_numbers = [int(file.split('_')[-1].split('.')[0]) for file in checkpoint_files]
+    highest_epoch = max(epoch_numbers)
+    
+    # load checkpoint
+    checkpoint = torch.load(os.path.join(checkpoint_folder, f'checkpoint_epoch_{highest_epoch}.pt'))
+    return checkpoint
+
+
 # define parameters
-GEOMETRY_NAME           = 'circular_hole'       # This is more like a dataset name
-TRAIN_VAL_TEST_SPLIT    = (0.6, 0.2, 0.2)
-BATCH_SIZE              = 16
-NUM_WORKERS             = 0
-LEARNING_RATE           = 1e-3
-EPOCHS                  = 5
+GEOMETRY_NAME           = 'circular_hole'
+MODEL_NAME              = 'first_test'
+LEARNING_RATE           = 8e-4
+EPOCHS                  = 3
 EVAL_ON_STEP            = 350
 LOSS_PRINT_DECIMALS     = 5
 SAVE_MODEL_AFTER_EPOCHS = 3
 
 # get datasets
-train_dataloader, val_dataloader, test_dataloader = build_dataset(GEOMETRY_NAME, TRAIN_VAL_TEST_SPLIT, BATCH_SIZE, NUM_WORKERS)
+train_dataloader, val_dataloader, test_dataloader = load_datasets(GEOMETRY_NAME)
 
 # choose training device
 device = (
     "cuda"
     if torch.cuda.is_available()
-    else "mps"
+    else "mps" # mac devices
     if torch.backends.mps.is_available()
     else "cpu"
 )
@@ -47,35 +65,67 @@ class NeuralNetwork(nn.Module):
         return output
     
 # prepare checkpoint folder
-checkpoint_folder = os.path.join('checkpoints', GEOMETRY_NAME)
+checkpoint_folder = os.path.join('checkpoints', GEOMETRY_NAME, MODEL_NAME)
+continue_training = False
 if not os.path.exists(checkpoint_folder):
     os.makedirs(checkpoint_folder)
 else:
-    assert False, 'Please clear existing checkpoints'
+    print('=== Checkpoint folder already exists. Unless you want to continue training delete it or choose another model name.')
+    response = input('Do you want to continue training y/n?\n')
+    if response not in ['y', 'Y']:
+        exit
+    else:
+        continue_training = True
 
 # create model and send to device
 model = NeuralNetwork().to(device)
 print('\n=== Model structure ===')
 print(model, '\n')
 
-# save model structure to checkpoints
-with open(os.path.join(checkpoint_folder, 'model_structure.txt'), "w") as file:
-    file.write(str(model))
+# handle model structure
+if continue_training:
+    # compare saved model structure to loaded
+    with open(os.path.join(checkpoint_folder, 'model_structure.txt'), "r") as file:
+        assert file.read() == str(model), 'Make sure the model has the same structure'
+else:
+    # save model structure
+    with open(os.path.join(checkpoint_folder, 'model_structure.txt'), "w") as file:
+        file.write(str(model))
+
+# load model weights
+if continue_training:
+    checkpoint = load_model(checkpoint_folder)
+    model.load_state_dict(checkpoint['model_state_dict'])
 
 # create optimizer and loss
 opt = Adam(model.parameters(), lr=LEARNING_RATE)
-loss_fn = nn.CrossEntropyLoss()
+if continue_training:
+    opt.load_state_dict(checkpoint['optimizer_state_dict'])
+    loss_fn = checkpoint['loss']
+else:
+    loss_fn = nn.CrossEntropyLoss()
 
 # create tensorboard writer
-writer = SummaryWriter(f'runs/{GEOMETRY_NAME}')
+writer = SummaryWriter(os.path.join(checkpoint_folder, 'logs'))
 
 print(f'Nr of training batches: {len(train_dataloader)}')
 print(f'Nr of validation batches: {len(val_dataloader)}')
 print()
 
+# define epoch range
+if continue_training:
+    starting_epoch = checkpoint['epoch'] + 1
+else:
+    starting_epoch = 0
+ending_epoch = starting_epoch + EPOCHS
+
 # Training flow
-for epoch in range(EPOCHS):
+for epoch in range(starting_epoch, ending_epoch):
+    print(f'Starting epoch {epoch}')
     running_loss = 0.0
+    
+    # write learning rate to tensorboard
+    writer.add_scalar('Learning rate', LEARNING_RATE, epoch*len(train_dataloader))
     
     for i, batch in enumerate(train_dataloader):
         # basic training loop
@@ -118,10 +168,10 @@ for epoch in range(EPOCHS):
     
     # save model parameters every n epochs
     if epoch % SAVE_MODEL_AFTER_EPOCHS == SAVE_MODEL_AFTER_EPOCHS-1:
-        torch.save(model.state_dict(), os.path.join(checkpoint_folder, f'checkpoint_epoch_{epoch}.pt'))
+        save_model(model, epoch, opt, loss_fn, checkpoint_folder)
 
 # save final model
-torch.save(model.state_dict(), os.path.join(checkpoint_folder, f'checkpoint_epoch_{epoch}.pt'))
+save_model(model, epoch, opt, loss_fn, checkpoint_folder)
 
 print ('\nTraining finished')
 

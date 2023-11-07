@@ -37,7 +37,7 @@ if __name__=='__main__':
     SAVE_MODEL_AFTER_EPOCHS = 3
 
     # get datasets
-    train_dataloader, val_dataloader, test_dataloader = load_datasets(GEOMETRY_NAME)
+    train_dataloader, val_dataloader, _ = load_datasets(GEOMETRY_NAME)
 
     # choose training device
     device = (
@@ -121,6 +121,7 @@ if __name__=='__main__':
     ending_epoch = starting_epoch + EPOCHS
 
     # Training flow
+    model.train()
     for epoch in range(starting_epoch, ending_epoch):
         print(f'Starting epoch {epoch}')
         running_loss = 0.0
@@ -145,18 +146,18 @@ if __name__=='__main__':
                 # validation
                 running_vloss = 0.0
                 
-                model.train(False)
-                for j, vbatch in enumerate(test_dataloader):
+                model.eval()
+                for j, vbatch in enumerate(val_dataloader):
                     vinputs, vlabels = vbatch
                     vinputs = vinputs.to(device, dtype=torch.float32)
                     vlabels = vlabels.to(device, dtype=torch.float32)
                     voutputs = model(vinputs)
                     vloss = loss_fn(voutputs, vlabels)
                     running_vloss += vloss.item()
-                model.train(True)
+                model.train()
                 
                 avg_loss = running_loss / EVAL_ON_STEP
-                avg_vloss = running_vloss / len(test_dataloader)
+                avg_vloss = running_vloss / len(val_dataloader)
                 
                 print(f'Epoch {epoch:4d} Batch {i+1:6d} Loss {avg_loss:{LOSS_PRINT_DECIMALS+3}.{LOSS_PRINT_DECIMALS}f} Vloss {avg_vloss:{LOSS_PRINT_DECIMALS+3}.{LOSS_PRINT_DECIMALS}f}')
                 

@@ -14,7 +14,9 @@ The goal of this code is to train a neural network that can generate phonon path
 
 ## TODO
 
-- Load and inference functions
-- Visualize results function
 - can the network use the two points that are given to "unfairly" get the next one??
 - Maybe use dataset_name so that multiple datasets can be built on one set of data?
+- Inference:
+  - Unscale the data
+  - visualize results (with structure?, with actual paths?)
+  - reorder results to structure as before

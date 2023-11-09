@@ -1,3 +1,5 @@
+"""This modules trains the model on the datasets"""
+
 import os
 from preprocess import load_datasets
 import torch
@@ -12,7 +14,8 @@ def save_model(model, epoch, optimizer, criterion, checkpoint_folder):
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'loss': criterion}, os.path.join(checkpoint_folder, f'checkpoint_epoch_{epoch}.pt'))
-    
+
+
 def load_model(checkpoint_folder):
     # find the latest checkpoint
     files = os.listdir(checkpoint_folder)
@@ -20,7 +23,7 @@ def load_model(checkpoint_folder):
     assert checkpoint_files, 'No checkpoints found'
     epoch_numbers = [int(file.split('_')[-1].split('.')[0]) for file in checkpoint_files]
     highest_epoch = max(epoch_numbers)
-    
+
     # load checkpoint
     checkpoint = torch.load(os.path.join(checkpoint_folder, f'checkpoint_epoch_{highest_epoch}.pt'))
     return checkpoint
@@ -64,7 +67,7 @@ if __name__=='__main__':
         def forward(self, x):
             output = self.model(x)
             return output
-        
+
     # prepare checkpoint folder
     checkpoint_folder = os.path.join('checkpoints', GEOMETRY_NAME, MODEL_NAME)
     continue_training = False
@@ -125,10 +128,10 @@ if __name__=='__main__':
     for epoch in range(starting_epoch, ending_epoch):
         print(f'Starting epoch {epoch}')
         running_loss = 0.0
-        
+
         # write learning rate to tensorboard
         writer.add_scalar('Learning rate', LEARNING_RATE, epoch*len(train_dataloader))
-        
+
         for i, batch in enumerate(train_dataloader):
             # basic training loop
             inputs, labels = batch
@@ -139,13 +142,13 @@ if __name__=='__main__':
             loss = loss_fn(outputs, labels)
             loss.backward()
             opt.step()
-            
+
             running_loss += loss.item()
             if i % EVAL_ON_STEP == EVAL_ON_STEP-1: # every n mini-batches
-                
+
                 # validation
                 running_vloss = 0.0
-                
+
                 model.eval()
                 for j, vbatch in enumerate(val_dataloader):
                     vinputs, vlabels = vbatch
@@ -155,19 +158,19 @@ if __name__=='__main__':
                     vloss = loss_fn(voutputs, vlabels)
                     running_vloss += vloss.item()
                 model.train()
-                
+
                 avg_loss = running_loss / EVAL_ON_STEP
                 avg_vloss = running_vloss / len(val_dataloader)
-                
+
                 print(f'Epoch {epoch:4d} Batch {i+1:6d} Loss {avg_loss:{LOSS_PRINT_DECIMALS+3}.{LOSS_PRINT_DECIMALS}f} Vloss {avg_vloss:{LOSS_PRINT_DECIMALS+3}.{LOSS_PRINT_DECIMALS}f}')
-                
+
                 # log the running loss average
                 writer.add_scalars('Training vs. Validation Loss',
                                 { 'Training' : avg_loss, 'Validation' : avg_vloss },
                                 epoch * len(train_dataloader) + i)
-                
+
                 running_loss = 0.0
-        
+
         # save model parameters every n epochs
         if epoch % SAVE_MODEL_AFTER_EPOCHS == SAVE_MODEL_AFTER_EPOCHS-1:
             save_model(model, epoch, opt, loss_fn, checkpoint_folder)

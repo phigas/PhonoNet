@@ -11,6 +11,13 @@ The goal of this code is to train a neural network that can generate phonon path
 - Run the `train_model.py` and make sure to set the parameters you want. Multiple NN structures can be tested on one dataset by changing the `MODEL_NAME` parameter. The script will save checkpoints and tensorboard log data in a checkpoints folder.
   - If the script is run with the same `MODEL_NAME` it will five the options to continue training from the last checkpoint. This way the learning rate can be changed.
 - TODO: inference script
+- Run `plot_paths.py` to visualize the trajectories
+
+## Dependances
+
+```
+pip install torch sklearn
+```
 
 ## TODO
 

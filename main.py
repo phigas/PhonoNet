@@ -1,9 +1,8 @@
 import os
-import re
 import shutil
 import pickle
 
-from preprocess import get_samples, scale_data, read_area
+from preprocess import preprocess
 from torch import save
 
 
@@ -63,7 +62,7 @@ class TrainingHelper:
         split = self.utils.get_split()
         
         # do the preprocessing
-        train_dataset, val_dataset, test_dataset, scaler = preprocess()
+        train_dataset, val_dataset, test_dataset, scaler = preprocess(split, dataset_path)
         
         # create folder 
         if not os.path.exists(dataset_path):
@@ -82,7 +81,6 @@ class TrainingHelper:
         # info_dict = {
             
         # }
-    
     
     def training(self):
         print('training network wooosh (wip)')
@@ -140,28 +138,20 @@ class TrainingHelperUtils():
     def get_split(self):
         print('Enter the train, val, test split (example "0.7 0.1 0.2"):')
         while True:
-            while True:
-                split = input()
-                try:
-                    split = split.split(' ')
-                    if len(split) == 3:
-                        split = [float(i) for i in split]
-                        if sum(split) == 1:
-                            break
-                except:
-                    pass
-                print('Please enter the split like this: 0.7 0.1 0.2 (must add up to one):')
+            split = input()
+            try:
+                split = split.split(' ')
+                if len(split) == 3:
+                    split = [float(i) for i in split]
+                    if sum(split) == 1:
+                        break
+            except:
+                pass
+            print('Please enter the split like this: 0.7 0.1 0.2 (must add up to one):')
             
-            print(f'The sets will contain approximately this many samples: {round(samples_nr*split[0])}, {round(samples_nr*split[1])}, {round(samples_nr*split[2])}')
-            samples_ok = input('Is this ok (yes/no): ')
-            if samples_ok == 'yes':
-                break
-            print('Please enter the new split:')
         print()
         return split
 
 if __name__ == "__main__":
     TrainingHelper()
-    
-    
     

@@ -6,6 +6,30 @@ from sklearn.preprocessing import MinMaxScaler
 import torch
 from torch.utils.data import TensorDataset, random_split, DataLoader
 
+def read_area(self, data_name):
+    file_path = os.path.join('Results', data_name, 'Information.txt')
+    
+    with open(file_path, 'r') as file:
+        content = file.read()
+
+    # Define patterns to match the variables and their values
+    patterns = {
+        'Length': r'Length = (\d+\.\d+) nm',
+        'Width': r'Width = (\d+\.\d+) nm',
+        'Thickness': r'Thickness = (\d+\.\d+) nm'
+    }
+
+    variable_values = {}
+
+    for variable, pattern in patterns.items():
+        match = re.search(pattern, content)
+        if match:
+            variable_values[variable] = float(match.group(1))
+        else:
+            print(f"Unable to find {variable} in the file.")
+    
+    return variable_values['Length'], variable_values['Width'], variable_values['Thickness']
+
 
 def get_scaler(thickness, width, length):
     # the scaler will scale each coordinate to 0..1 in function of the simulation domain
@@ -32,7 +56,7 @@ def scale_data(samples, thickness, width, length):
 
     samples = scaler.transform(samples)
 
-    return samples
+    return samples, scaler
 
 
 def unscale_data(samples, thickness, width, length):
@@ -78,6 +102,34 @@ def load_datasets(geometry_name):
 
     return train_dataloader, val_dataloader, test_dataloader
 
+def get_samples(data_name):
+    # matrix should have three times as many columns as photons (x,y,z), number of lines depends on the longest phonon travel or the time limit
+    phonon_paths = np.loadtxt(os.path.join('Results', data_name, 'Data/Phonon paths.csv'), delimiter=',')
+    
+    phonon_number = round(phonon_paths.shape[1]/3)
+    
+    # initialize list to store samples
+    samples = []
+    
+    for phonon_nr in range(phonon_number):
+        # Extract one phonon path
+        phonon_path = phonon_paths[:,phonon_nr*3:phonon_nr*3+3]
+
+        # Remove lines with 0s
+        phonon_path = phonon_path[~np.all(phonon_path == 0, axis=1)]
+        # Create coordinate triplets for training (two coordinates as input and one as output)
+        stacked_path = np.stack((phonon_path[:-2], phonon_path[1:-1], phonon_path[2:]), axis=1)
+        # add to list
+        samples.append(stacked_path)
+    
+    # Build dataset matrix (threedimensional matrix with dimensions: sample, coordinate number, coordinate direction)
+    samples = np.concatenate(samples)
+    
+    # the data needs to be flattened so that the scaler works and for the nn later
+    samples = np.reshape(samples, (-1,9))
+    
+    return samples, phonon_number
+
 
 if __name__ == '__main__':
     GEOMETRY_NAME           = 'circular_hole'
@@ -88,52 +140,22 @@ if __name__ == '__main__':
     BATCH_SIZE              = 16
     NUM_WORKERS             = 0
 
+    # read the data and convert to samples
+    samples, phonon_nr = get_samples(data_name)
+    samples_nr = samples.shape[0]
+    
+    # read size of area from the config file
+    length, width, thickness = self.read_area(data_name)   
+    print(length, width, thickness)
 
-    # check if folder created
-    folder = os.path.join('Datasets', GEOMETRY_NAME)
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-
-    # matrix should have three times as many columns as photons (x,y,z), number of lines depends on the longest phonon travel or the time limit
-    phonon_paths = np.loadtxt(os.path.join('Results', GEOMETRY_NAME, 'Data/Phonon paths.csv'), delimiter=',')
-    print('Data loaded succesfully')
-
-    # initialize list to store samples
-    samples = []
-
-    for phonon_nr in range(round(phonon_paths.shape[1]/3)):
-        # Extract one phonon path
-        phonon_path = phonon_paths[:,phonon_nr*3:phonon_nr*3+3]
-
-        # Remove lines with 0s
-        phonon_path = phonon_path[~np.all(phonon_path == 0, axis=1)]
-        # Create coordinate triplets for training (two coordinates as input and one as output)
-        stacked_path = np.stack((phonon_path[:-2], phonon_path[1:-1], phonon_path[2:]), axis=1)
-        # add to list
-        samples.append(stacked_path)
-
-    # Build dataset matrix (threedimensional matrix with dimensions: sample, coordinate number, coordinate direction)
-    samples = np.concatenate(samples)
-    print('Data reshaped')
-
-    # normalize the data to 0-1 (for each coordinate individually) (alternatively data standartization might give better results)
-    # the data needs to be flattened so that the scaler works and for the nn later
-    print(samples[0],samples.shape)
-    samples = np.reshape(samples, (-1,9))
-    print(samples[0],samples.shape)
-    samples = scale_data(samples, THICKNESS, WIDTH, LENGTH)
-    print(samples[0])
-
-    # save the data
-    np.save(os.path.join(folder, 'full_data.npy'), samples, allow_pickle=False)
+    # scale the data
+    samples, scaler = scale_data(samples, thickness, width, length)
+    
 
     # generate datasets
     train_dataloader, val_dataloader, test_dataloader = build_dataset(samples, TRAIN_VAL_TEST_SPLIT, BATCH_SIZE, NUM_WORKERS)
 
-    # save datasets
-    torch.save(train_dataloader, os.path.join(folder, 'train.dl'))
-    torch.save(val_dataloader, os.path.join(folder, 'val.dl'))
-    torch.save(test_dataloader, os.path.join(folder, 'test.dl'))
+
 
     # save information
     with open(os.path.join(folder, 'info.txt'), "w") as file:
